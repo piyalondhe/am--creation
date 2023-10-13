@@ -1,0 +1,35 @@
+version: 0.2
+env:
+  variables:
+    AWS_ACCESS_KEY_ID = "ASIAQ26LNI3BYQ65TJIR"
+    AWS_SECRET_KEY = "UNaFDkqNjrqF+ONyAGbdaVX/BBJeLgR6Ok2bnkNh"
+    AWS_SESSION_TOKEN =  "IQoJb3JpZ2luX2VjEPX//////////wEaDGV1LWNlbnRyYWwtMSJHMEUCIGfITT7D7Jjr/hDz/39qftmTDaSsf9L4FsxnPZ6rH1VEAiEA9vEMOH5FE0td4VD53PdwHqta59SoAQc3U6XO8tIyPbcq+AEI/v//////////ARABGgwwNTc4NzE3Nzk1MjMiDIANPeZdNU8B//o7SyrMAWkKurrrOUMyOHH5gVkre9UA35P0IOcsNs/h4F92U1rK+5lQPt1fDfase68pfAv7sX08UXCedxWqm4eRH3nG+Ok1UCku6jP3tFuopyTQVb8kHhF0PTB92wY/42ydBqzsferDfLKt4U0vDzhFZasnicERDSnS/Rbf2HlAoYno9snkvqbUHgNbwNVQ+6+uTMblc9nBnLCTaioekTWbeFhRmJCamDlMyB6uGrsDakFgjd7HuckUxOx+G4jvk/heGIIsi3DWvBZ8rmspyHK+wDCO752pBjqYAemJt+Be705KNeqbl0k/e0N1V2dLzSipgROuiTUG7zlNCevA8J3tgh0A/V6nriaKqN/jQ5rwB9NM0L7Kn38c+Pl6A/ySSana0jcfhN3VDyMlBIYy/bhC0W/C/skGRVWQnGHGPPPgi0gy2oBVRr89RvYBewu9IbedDgP3EoVJDnQ6AC5a72v1G6vUZn45puaAuOZLpQuOeVrO"
+    AWS_REGION = "eu-central-1"
+phases:
+  pre_build:
+    commands:
+      - echo "Installing Packer, Jq and then validating"
+      - curl -qL -o packer.zip https://releases.hashicorp.com/packer/1.7.8/packer_1.7.8_linux_amd64.zip && unzip packer.zip
+      - ./packer validate amazon-linux_packer-template.json
+  build:
+    commands:
+      #- cat config-aws > aws configure set aws_access_key_id "$AWS_ACCESS_KEY_ID" --profile default && aws configure set aws_secret_access_key "$AWS_SECRET_ACCESS_KEY" --profile default && aws configure set region "$AWS_REGION" --profile default && aws configure set output "json" --profile default
+      - echo "Building HashiCorp Packer template, amazon-linux_packer-template.json"
+      - ./packer build amazon-linux_packer-template.json
+  post_build:
+    commands:
+      - echo "HashiCorp Packer build completed on `date`"
+      - echo "Stopping existing Packer Instance"
+      - export INSTANCE_ID=$(aws ec2 describe-instances --query "Reservations[*].Instances[*].InstanceId" --filters "Name=tag:Name,Values=Packer1" "Name=instance-state-name,Values=running" --output text)
+      - echo $INSTANCE_ID
+      - echo "Terminating instances created by packer previously" 
+      - aws ec2 terminate-instances --instance-ids $INSTANCE_ID
+      - echo "Filtering AMI ID of Latest AMI Created by packer"
+      - export CUSTOM_AMI=$(aws ec2 describe-images --owners "057871779523" --filters "Name=tag:Name,Values=Packer*" --query "sort_by(Images, &CreationDate)[-1].ImageId" --output text)
+      - echo "Creating EC2 Instance with latest AMI for use with AWS Code Inspector...."
+      - aws ec2 run-instances --image-id $CUSTOM_AMI --count 1 --instance-type t2.micro --key-name US-145 --security-group-ids sg-0a21109b130bcb16a --subnet-id subnet-086013f8d3152369d --associate-public-ip-address --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=Packer1}]'
+      - sleep 180      
+      - echo "Executing AWS Inspector Assessment run"
+      - export TEMP_ARN=arn:aws:inspector:eu-central-1:057871779523:target/0-ekvuW0UV/template/0-JeqSxfL1
+      - aws inspector start-assessment-run --assessment-run-name PackerAssess --assessment-template-arn arn:aws:inspector:eu-central-1:995615868335:target/0-ekvuW0UV/template/0-JeqSxfL1
+      - echo "The End"

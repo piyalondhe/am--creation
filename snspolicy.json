@@ -1,0 +1,23 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Sid": "",
+        "Effect": "Allow",
+        "Principal": {
+          "Service": "codestar-notifications.amazonaws.com"
+        },
+        "Action": "sns:Publish",
+        "Resource": "arn:aws:sns:eu-central-1:057871779523:user-updates-topic"
+      },
+      {
+        "Sid": "inspector-sns-publish-statement",
+        "Effect": "Allow",
+        "Principal": {
+          "Service": "inspector.amazonaws.com"
+        },
+        "Action": "SNS:Publish",
+        "Resource": "arn:aws:sns:*"
+      }
+    ]
+  }

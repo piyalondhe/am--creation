@@ -1,0 +1,48 @@
+
+{
+    "variables": {
+        "vpc": "vpc-0e9dbe2b4fa331125",
+        "subnet": "subnet-0a0206f7b5a557e7c",
+        "aws_region": "{{env `AWS_REGION`}}",
+        "aws_ami_name": "amazon-linux_{{isotime \"02Jan2006\"}}"
+    },
+
+    "builders": [{
+        "type": "amazon-ebs",
+        "region": "{{user `aws_region`}}",
+        "instance_type": "t2.micro",
+        "ssh_username": "ec2-user",
+        "ami_name": "custom-ami {{timestamp}}",
+        "ami_description": "Customized Amazon Linux",
+        "vpc_id": "{{user `vpc`}}",
+        "subnet_id": "{{user `subnet`}}",
+        "associate_public_ip_address": "true",
+        "source_ami_filter": {
+            "filters": {
+                "virtualization-type": "hvm",
+                "name": "amzn-ami*-ebs",
+                "root-device-type": "ebs"
+            },
+            "owners": "amazon",
+            "most_recent": true
+        }
+    }],
+
+    "provisioners": [
+        {
+            "type": "shell",
+            "inline": [
+                "sudo yum update -y",
+				"sudo /usr/sbin/update-motd --disable",
+                "echo 'No unauthorized access permitted' | sudo tee /etc/motd",
+                "sudo rm /etc/issue",
+                "sudo ln -s /etc/motd /etc/issue",
+                "sudo yum install -y elinks screen",
+                "curl -O https://inspector-agent.amazonaws.com/linux/latest/install",
+				"sudo bash install",
+                "sudo /etc/init.d/awsagent start",
+                "ps -ef|grep -i awsagent"                
+            ]
+        }
+    ]
+}
