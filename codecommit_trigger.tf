@@ -19,7 +19,7 @@ resource "aws_cloudwatch_event_rule" "codecommit_activity" {
       "branch"
     ],
     "referenceName": [
-      "main"
+      "master"
     ]
   }
 }
