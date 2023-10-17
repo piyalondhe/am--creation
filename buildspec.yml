@@ -1,19 +1,20 @@
 version: 0.2
-env:
-  variables:
-    AWS_ACCESS_KEY_ID = "ASIAQ26LNI3B7BLBZAG7"
-    AWS_SECRET_KEY = "4TwfURp/ObctECLUScSBmk72wCeOlp52obMKsZg/"
-    AWS_SESSION_TOKEN =  "IQoJb3JpZ2luX2VjEA0aDGV1LWNlbnRyYWwtMSJIMEYCIQDZpXLFgGx72e6Yq/QQT7ndFZ2WwX9wsGHkWpV9CLDnWwIhAI2YHdMKlQ2YYrY8fiYuW8L8Tj4q25sYut6ZgHjekB2eKu8BCCYQARoMMDU3ODcxNzc5NTIzIgwU3LeHaKBa/M6XzhcqzAEbTcyhgawYoQFg6mYSnP3O8yH9rNc2mgpITcccd6gANFjlROR1hgaFEuP29pNJcpfjux71S7oqabhVSUWOT7U+xqni+r4fAG05M4VQ6BkrfiIlZe+MXUTwFlRqzHe/n/jQkq48N6r5jRpieDmZq7mwBg+0OG0bOLin/S2jiL437dMt+1Gf2T1ZZy+rFkGxH/tjofsuv5i7Wy3wKUnUpSwZ8HwbVGNZpK54raOx5Q+XqbmmA7k0zzwWNeXC/0Q1G2PtiAYefVIdw5jA99UwpKajqQY6lwG4BU147aD702OoXCM2SwPmxidho4w+VJGTbp2Vm3+Ea5RNUSkEYBMUgsCOWmHyhmtLl+yZd3KjZtmwTmVKPB6lfeN64E6OMCsqkhqd9Pijm3NlNj4zC3vsKpNeUYBupHYRVa691DgltV6RJd+kVN6329rXmp7LfPH4pIGx/pzld4TFJ233BWnt4AjaFf5OcgVPkUbeF7/g"
-    AWS_REGION = "eu-central-1"
+
 phases:
   pre_build:
     commands:
       - echo "Installing Packer, Jq and then validating"
       - curl -qL -o packer.zip https://releases.hashicorp.com/packer/1.7.8/packer_1.7.8_linux_amd64.zip && unzip packer.zip
+      - curl -qL -o jq https://stedolan.github.io/jq/download/linux64/jq && chmod +x ./jq
       - ./packer validate amazon-linux_packer-template.json
   build:
     commands:
-      #- cat config-aws > aws configure set aws_access_key_id "$AWS_ACCESS_KEY_ID" --profile default && aws configure set aws_secret_access_key "$AWS_SECRET_ACCESS_KEY" --profile default && aws configure set region "$AWS_REGION" --profile default && aws configure set output "json" --profile default
+      - echo "Configuring AWS credentials"
+      - curl -qL -o aws_credentials.json http://169.254.170.2/$AWS_CONTAINER_CREDENTIALS_RELATIVE_URI > aws_credentials.json
+      - aws configure set region $AWS_REGION
+      - aws configure set aws_access_key_id `./jq -r '.AccessKeyId' aws_credentials.json`
+      - aws configure set aws_secret_access_key `./jq -r '.SecretAccessKey' aws_credentials.json`
+      - aws configure set aws_session_token `./jq -r '.Token' aws_credentials.json`
       - echo "Building HashiCorp Packer template, amazon-linux_packer-template.json"
       - ./packer build amazon-linux_packer-template.json
   post_build:
@@ -25,11 +26,11 @@ phases:
       - echo "Terminating instances created by packer previously" 
       - aws ec2 terminate-instances --instance-ids $INSTANCE_ID
       - echo "Filtering AMI ID of Latest AMI Created by packer"
-      - export CUSTOM_AMI=$(aws ec2 describe-images --owners "057871779523" --filters "Name=tag:Name,Values=Packer*" --query "sort_by(Images, &CreationDate)[-1].ImageId" --output text)
+      - export CUSTOM_AMI=$(aws ec2 describe-images --owners "995615868335" --filters "Name=tag:Name,Values=Packer*" --query "sort_by(Images, &CreationDate)[-1].ImageId" --output text)
       - echo "Creating EC2 Instance with latest AMI for use with AWS Code Inspector...."
       - aws ec2 run-instances --image-id $CUSTOM_AMI --count 1 --instance-type t2.micro --key-name US-145 --security-group-ids sg-0a21109b130bcb16a --subnet-id subnet-086013f8d3152369d --associate-public-ip-address --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=Packer1}]'
       - sleep 180      
       - echo "Executing AWS Inspector Assessment run"
-      - export TEMP_ARN=arn:aws:inspector:eu-central-1:057871779523:target/0-ekvuW0UV/template/0-JeqSxfL1
+      - export TEMP_ARN=arn:aws:inspector:eu-central-1:995615868335:target/0-ekvuW0UV/template/0-JeqSxfL1
       - aws inspector start-assessment-run --assessment-run-name PackerAssess --assessment-template-arn arn:aws:inspector:eu-central-1:995615868335:target/0-ekvuW0UV/template/0-JeqSxfL1
       - echo "The End"
